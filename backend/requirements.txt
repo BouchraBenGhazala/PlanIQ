@@ -11,6 +11,8 @@ langchain-openai
 langgraph
 langchain-google-genai
 
+langchain-groq
+langchain-mistralai
 
 fastapi "uvicorn[standard]" 
 python-multipart 

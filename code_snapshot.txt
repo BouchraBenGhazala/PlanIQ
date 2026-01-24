@@ -1,0 +1,461 @@
+--- File: .\create_code_snapchot.py ---
+import os
+
+def generate_code_snapshot(output_filename="code_snapshot.txt"):
+    """
+    Gathers only source code files from the project, excluding specified
+    directories and file types, and combines them into a single text file.
+    """
+    # --- CONFIGURATION ---
+    # 1. Add any folders you want to completely skip
+    excluded_folders = {
+        'venv', '.env', '__pycache__', '.git', '.vscode', 
+        'demo', 'docs', 'data','checkpoints','docs(pour moi)','mlruns','screenshots'
+    }
+
+    # 2. Add specific files to skip
+    excluded_files = {output_filename, '.gitignore','TSG_Cognitive Layer - T4.4 - Work Progress.pptx'}
+
+    # 3. *** IMPORTANT: Only files with these extensions will be included ***
+    #    Add any other source code extensions you use (e.g., '.js', '.css')
+    allowed_extensions = {
+        '.py', '.txt', '.md', '.json', '.html', '.css', '.js', 
+        '.yaml', '.yml', '.toml', '.ini', 'Dockerfile', '.cfg'
+        # Note: Add a dot for extensions. For files without extensions like 'Dockerfile', just list the name.
+    }
+    # --- END CONFIGURATION ---
+
+    with open(output_filename, 'w', encoding='utf-8') as outfile:
+        print(f"Starting code snapshot... Output will be in '{output_filename}'")
+        file_count = 0
+        for root, dirs, files in os.walk('.', topdown=True):
+            # Exclude specified directories from traversal
+            dirs[:] = [d for d in dirs if d not in excluded_folders]
+
+            for filename in files:
+                # Check if the file should be skipped
+                if filename in excluded_files:
+                    continue
+
+                # Check if the file extension is in our whitelist
+                # This is the key change to prevent reading binary files.
+                file_ext = os.path.splitext(filename)[1]
+                if file_ext not in allowed_extensions and filename not in allowed_extensions:
+                    continue
+
+                filepath = os.path.join(root, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as infile:
+                        content = infile.read()
+                        outfile.write(f"--- File: {filepath} ---\n")
+                        outfile.write(content)
+                        outfile.write("\n\n")
+                        file_count += 1
+                        print(f"  + Added: {filepath}")
+
+                except Exception as e:
+                    outfile.write(f"--- Error reading file {filepath}: {e} ---\n\n")
+
+    print(f"\nSnapshot complete. Combined {file_count} files into '{output_filename}'.")
+
+if __name__ == "__main__":
+    generate_code_snapshot()
+
+--- File: .\README.md ---
+
+
+--- File: .\backend\credentials.json ---
+{"installed":{"client_id":"1050602876350-8k82no39vgoesf7pb6j6v2cfus36nold.apps.googleusercontent.com","project_id":"planiq-agenda-project","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["http://localhost"]}}
+
+--- File: .\backend\requirements.txt ---
+google-api-python-client 
+google-auth-httplib2 
+google-auth-oauthlib 
+python-dotenv
+ 
+opik
+langchain
+langchain-community
+langchain-core
+langchain-openai
+langgraph
+langchain-google-genai
+
+langchain-groq
+langchain-mistralai
+
+fastapi "uvicorn[standard]" 
+python-multipart 
+sqlalchemy 
+aiosqlite 
+requests
+
+annotated-types 
+pydantic 
+pydantic-core
+
+
+--- File: .\backend\token.json ---
+{"token": "ya29.a0AUMWg_LnmJmKZ-jxjWkNcEAhw4EcHnJuWSsyOA0fCu3pdre6NHnwL2mD0Ruk47xopLF_xbTM67qDIA0_Vam4onOCgOrFFy3FaheE_Lm-MsHduv-epIiZRU6W5MeX6kFr6u26P1VWl3QkIEbdzHtpdKfAsk7PvFChQx_aUhmQ312eTC3LUNgQusTFJHjSxnx4DkObBwYaCgYKAWMSARISFQHGX2MiNnXKlZ5QmmGAeO46E5Fp5w0206", "refresh_token": "1//03f3Xw0bt7bOJCgYIARAAGAMSNwF-L9Ir5Oei6_JIUtiNprZfQSLJdePYMryQQt3UDQhC4_5M2Ksw8k92yY2SwgzCbTJBi4fHEj0", "token_uri": "https://oauth2.googleapis.com/token", "client_id": "1050602876350-8k82no39vgoesf7pb6j6v2cfus36nold.apps.googleusercontent.com", "client_secret": "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", "scopes": ["https://www.googleapis.com/auth/calendar"], "universe_domain": "googleapis.com", "account": "", "expiry": "2026-01-24T23:00:16.118963Z"}
+
+--- File: .\backend\app\main.py ---
+import os
+import datetime
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+# AI Libraries
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.prebuilt import create_react_agent
+from opik.integrations.langchain import OpikTracer
+
+from langchain_groq import ChatGroq
+from langchain_mistralai import ChatMistralAI
+
+# Import all 4 tools
+from app.agent.tools import (
+    list_calendar_events, 
+    create_calendar_event, 
+    delete_calendar_event, 
+    update_calendar_event
+)
+
+load_dotenv()
+
+# 1. Initialize FastAPI
+app = FastAPI(title="PlanIQ API")
+
+# 2. Security / CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 3. Data Model
+class ChatRequest(BaseModel):
+    message: str
+
+# 4. Initialize AI Brain
+# llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0)
+
+# llm = ChatGroq(
+#     model="llama-3.3-70b-versatile", 
+#     temperature=0
+# )
+
+llm = ChatMistralAI(
+    model="mistral-small-latest", 
+    temperature=0,
+    api_key=os.getenv("MISTRAL_API_KEY")
+)
+
+# Register Tools
+tools = [
+    list_calendar_events, 
+    create_calendar_event,
+    delete_calendar_event,
+    update_calendar_event
+]
+
+# Create the Agent Graph
+agent_graph = create_react_agent(model=llm, tools=tools)
+
+# 5. Chat Endpoint
+# @app.post("/chat")
+# async def chat_endpoint(request: ChatRequest):
+#     print(f"Received: {request.message}")
+    
+#     try:
+#         # Dynamic Date & Context (Marseille/France)
+#         now = datetime.datetime.now()
+#         current_date_str = now.strftime("%A %d %B %Y")
+#         current_time_str = now.strftime("%H:%M")
+
+#         # System Prompt with "Anti-Double-Booking" Logic
+#         dynamic_system_prompt = f"""You are PlanIQ, an elite executive assistant in France (Marseille).
+        
+#         CONTEXT:
+#         - Today is: {current_date_str}
+#         - Current time: {current_time_str}
+#         - Timezone: Europe/Paris (CET)
+        
+#         Your Capabilities:
+#         1. READ: Use 'list_calendar_events' to see schedule AND internal IDs.
+#         2. WRITE: Use 'create_calendar_event' to book.
+#         3. MODIFY: Use 'update_calendar_event' to change time/title.
+#         4. DELETE: Use 'delete_calendar_event' to cancel.
+
+#         CRITICAL RULES:
+#         - **CONFLICTS:** If 'create_calendar_event' fails because the slot is busy, tell the user clearly: "I cannot book this, you already have [Event Name] at that time." and propose a new time.
+#         - **IDs:** To Modify/Delete, you MUST first run 'list_calendar_events' to find the internal ID.
+#         - **PRIVACY:** NEVER show the internal ID (e.g., 'abc12345') to the user.
+#         """
+
+#         inputs = {
+#             "messages": [
+#                 SystemMessage(content=dynamic_system_prompt),
+#                 HumanMessage(content=request.message)
+#             ]
+#         }
+        
+#         # Run Agent with Opik Tracking
+#         result = agent_graph.invoke(
+#             inputs,
+#             config={"callbacks": [OpikTracer()]}
+#         )
+        
+#         # Extract Response
+#         final_message = result["messages"][-1]
+#         raw_content = final_message.content
+        
+#         # Clean Output (Gemini specific)
+#         clean_text = ""
+#         if isinstance(raw_content, list) and len(raw_content) > 0 and isinstance(raw_content[0], dict) and "text" in raw_content[0]:
+#             clean_text = raw_content[0]["text"]
+#         else:
+#             clean_text = str(raw_content)
+
+#         return {"response": clean_text}
+
+#     except Exception as e:
+#         print(f"Error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    print(f"Received: {request.message}")
+    
+    try:
+        now = datetime.datetime.now()
+        current_date_str = now.strftime("%A %d %B %Y")
+        current_time_str = now.strftime("%H:%M")
+
+        # Prompt renforcé pour éviter les hallucinations
+        dynamic_system_prompt = f"""You are PlanIQ, an executive assistant.
+        
+        CONTEXT:
+        - Date: {current_date_str}
+        - Time: {current_time_str}
+        
+        RULES FOR TOOLS:
+        1. REALITY CHECK: Do NOT say you created an event unless the 'create_calendar_event' tool returned "Success".
+        2. VERIFICATION: If you are unsure, check the calendar with 'list_calendar_events' first.
+        3. SILENCE: Don't imagine fake confirmations. Only report what the tools output.
+        """
+
+        inputs = {
+            "messages": [
+                SystemMessage(content=dynamic_system_prompt),
+                HumanMessage(content=request.message)
+            ]
+        }
+        
+        result = agent_graph.invoke(
+            inputs,
+            config={"callbacks": [OpikTracer()]}
+        )
+        
+        final_message = result["messages"][-1]
+        return {"response": final_message.content}
+
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+    
+@app.get("/")
+async def health_check():
+    return {"status": "PlanIQ Brain is online!"}
+
+--- File: .\backend\app\agent\tools.py ---
+import os
+import datetime
+from dotenv import load_dotenv
+from langchain.tools import tool
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+
+# Load environment variables
+load_dotenv()
+
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
+CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
+
+def get_calendar_service():
+    """Helper function to authenticate with Google (Do not modify)."""
+    creds = None
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "credentials.json", SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+
+    return build("calendar", "v3", credentials=creds)
+
+# --- TOOL 1: READ ---
+@tool
+def list_calendar_events():
+    """
+    Use this tool to check the user's schedule.
+    It returns a list of upcoming events WITH THEIR IDs.
+    IMPORTANT: You need the ID to update or delete an event.
+    """
+    try:
+        service = get_calendar_service()
+        # Get current time in UTC
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        
+        events_result = service.events().list(
+            calendarId=CALENDAR_ID,
+            timeMin=now,
+            maxResults=10,
+            singleEvents=True,
+            orderBy="startTime"
+        ).execute()
+        
+        events = events_result.get("items", [])
+        
+        if not events:
+            return "No upcoming events found."
+            
+        results = []
+        for event in events:
+            start = event["start"].get("dateTime", event["start"].get("date"))
+            summary = event["summary"]
+            event_id = event["id"] # Capture the ID for internal use
+            
+            # Format: [ID: xxxxx] - Date: Title
+            results.append(f"[ID: {event_id}] - {start}: {summary}")
+            
+        return "\n".join(results)
+
+    except Exception as e:
+        return f"Error fetching calendar: {str(e)}"
+
+# --- TOOL 2: CREATE (With Conflict Check) ---
+@tool
+def create_calendar_event(summary: str, start_time: str, duration_minutes: int = 60):
+    """
+    Use this tool to BOOK a new meeting or task.
+    It automatically checks if the slot is free before booking.
+    
+    Args:
+        summary: The title of the event (e.g., "Deep Work").
+        start_time: The start time in ISO format (e.g., "2026-01-25T14:00:00").
+        duration_minutes: How long the event lasts (default is 60 minutes).
+    """
+    try:
+        service = get_calendar_service()
+        
+        # 1. Parse dates and calculate End Time
+        start_dt = datetime.datetime.fromisoformat(start_time)
+        end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+        
+        # 2. CONFLICT CHECK: Look for events in this specific window
+        # We query Google to see if anything exists between start_dt and end_dt
+        conflicts_result = service.events().list(
+            calendarId=CALENDAR_ID,
+            timeMin=start_dt.isoformat() + "Z", # Convert to UTC string for API
+            timeMax=end_dt.isoformat() + "Z",
+            singleEvents=True
+        ).execute()
+        
+        conflicts = conflicts_result.get("items", [])
+        
+        # 3. If conflicts exist, STOP and return error
+        if conflicts:
+            conflict_summary = conflicts[0]['summary']
+            return f"FAILED: Time slot is already booked! There is a conflict with event: '{conflict_summary}'. Ask the user for a different time."
+
+        # 4. If slot is free, proceed with booking
+        event_body = {
+            'summary': summary,
+            'start': {
+                'dateTime': start_dt.isoformat(),
+                'timeZone': 'Europe/Paris', # Force Paris Timezone
+            },
+            'end': {
+                'dateTime': end_dt.isoformat(),
+                'timeZone': 'Europe/Paris',
+            },
+        }
+
+        event = service.events().insert(calendarId=CALENDAR_ID, body=event_body).execute()
+        return f"Success! Event '{summary}' created. Link: {event.get('htmlLink')}"
+
+    except Exception as e:
+        return f"Failed to create event: {str(e)}"
+
+# --- TOOL 3: DELETE ---
+@tool
+def delete_calendar_event(event_id: str):
+    """
+    Use this tool to CANCEL or DELETE an event.
+    You must provide the 'event_id' found using 'list_calendar_events'.
+    """
+    try:
+        service = get_calendar_service()
+        service.events().delete(calendarId=CALENDAR_ID, eventId=event_id).execute()
+        return "Success! Event deleted."
+    except Exception as e:
+        return f"Failed to delete event: {str(e)}"
+
+# --- TOOL 4: UPDATE ---
+@tool
+def update_calendar_event(event_id: str, new_start_time: str = None, new_summary: str = None):
+    """
+    Use this tool to RESCHEDULE or RENAME an event.
+    Args:
+        event_id: The ID of the event to change.
+        new_start_time: (Optional) New start time ISO format.
+        new_summary: (Optional) New title.
+    """
+    try:
+        service = get_calendar_service()
+        
+        # Get existing event
+        event = service.events().get(calendarId=CALENDAR_ID, eventId=event_id).execute()
+        
+        if new_summary:
+            event['summary'] = new_summary
+
+        if new_start_time:
+            start_dt = datetime.datetime.fromisoformat(new_start_time)
+            # Try to keep original duration
+            duration = datetime.timedelta(hours=1)
+            if 'start' in event and 'dateTime' in event['start'] and 'end' in event:
+                old_start = datetime.datetime.fromisoformat(event['start']['dateTime'])
+                old_end = datetime.datetime.fromisoformat(event['end']['dateTime'])
+                duration = old_end - old_start
+            
+            end_dt = start_dt + duration
+            
+            event['start'] = {'dateTime': start_dt.isoformat(), 'timeZone': 'Europe/Paris'}
+            event['end'] = {'dateTime': end_dt.isoformat(), 'timeZone': 'Europe/Paris'}
+
+        updated_event = service.events().update(calendarId=CALENDAR_ID, eventId=event_id, body=event).execute()
+        return f"Success! Event updated to: {updated_event.get('start').get('dateTime')} - {updated_event.get('summary')}"
+
+    except Exception as e:
+        return f"Failed to update event: {str(e)}"
+
