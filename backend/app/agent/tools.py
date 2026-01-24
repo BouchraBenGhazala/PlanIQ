@@ -69,3 +69,40 @@ def list_calendar_events():
 
     except Exception as e:
         return f"Error fetching calendar: {str(e)}"
+
+# --- TOOL 2: CREATE EVENT ---
+@tool
+def create_calendar_event(summary: str, start_time: str, duration_minutes: int = 60):
+    """
+    Use this tool to BOOK a new meeting or task.
+    
+    Args:
+        summary: The title of the event (e.g., "Interview", "Meeting with Antoine").
+        start_time: The start time in ISO format (e.g., "2026-01-25T14:00:00").
+        duration_minutes: How long the event lasts (default is 60 minutes).
+    """
+    try:
+        service = get_calendar_service()
+        
+        # Calculate End Time
+        start_dt = datetime.datetime.fromisoformat(start_time)
+        end_dt = start_dt + datetime.timedelta(minutes=duration_minutes)
+        
+        event_body = {
+            'summary': summary,
+            'start': {
+                'dateTime': start_dt.isoformat(),
+                'timeZone': 'Europe/Paris',
+            },
+            'end': {
+                'dateTime': end_dt.isoformat(),
+                'timeZone': 'Europe/Paris',
+            },
+        }
+
+        event = service.events().insert(calendarId=CALENDAR_ID, body=event_body).execute()
+        
+        return f"Success! Event '{summary}' created. Link: {event.get('htmlLink')}"
+
+    except Exception as e:
+        return f"Failed to create event: {str(e)}"
