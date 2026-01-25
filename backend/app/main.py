@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from opik.integrations.langchain import OpikTracer
 
-from langchain_groq import ChatGroq
+# from langchain_groq import ChatGroq
 from langchain_mistralai import ChatMistralAI
 
 # Import all 4 tools
