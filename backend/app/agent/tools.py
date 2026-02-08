@@ -7,6 +7,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+import json
 
 # Load environment variables
 load_dotenv()
@@ -18,23 +19,63 @@ CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
 # Define the specific timezone for France
 PARIS_TZ = zoneinfo.ZoneInfo("Europe/Paris")
 
-def get_calendar_service():
-    """
-    Authenticates with Google and returns the API service.
-    Handles token refresh automatically.
-    """
-    creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+# def get_calendar_service():
+#     """
+#     Authenticates with Google and returns the API service.
+#     Handles token refresh automatically.
+#     """
+#     creds = None
+#     if os.path.exists("token.json"):
+#         creds = Credentials.from_authorized_user_file("token.json", SCOPES)
     
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+#     if not creds or not creds.valid:
+#         if creds and creds.expired and creds.refresh_token:
+#             creds.refresh(Request())
+#         else:
+#             flow = InstalledAppFlow.from_client_secrets_file(
+#                 "credentials.json", SCOPES
+#             )
+#             creds = flow.run_local_server(port=0)
+#         with open("token.json", "w") as token:
+#             token.write(creds.to_json())
+
+#     return build("calendar", "v3", credentials=creds)
+
+#For rentail deployment
+def get_calendar_service():
+    creds = None
+    
+    # 1. CLOUD MODE: Check Environment Variable
+    # This is how Render will login without a browser
+    json_str = os.getenv("GOOGLE_TOKEN_JSON")
+    if json_str:
+        try:
+            token_data = json.loads(json_str)
+            creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+        except Exception as e:
+            print(f"Error reading GOOGLE_TOKEN_JSON: {e}")
+
+    # 2. LOCAL MODE: Check File
+    if not creds and os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+
+    # 3. Refresh Logic
+    if creds and creds.expired and creds.refresh_token:
+        try:
             creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
-            )
-            creds = flow.run_local_server(port=0)
+        except Exception:
+            print("Token expired and could not be refreshed.")
+            creds = None
+
+    # 4. IF AUTH FAILS
+    if not creds:
+        # If running on Server (Render), we MUST fail because we can't open a browser
+        if os.getenv("RENDER"): 
+             raise Exception("CRITICAL: Google Token is missing in Cloud Environment.")
+        
+        # If Local, open browser
+        flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+        creds = flow.run_local_server(port=0)
         with open("token.json", "w") as token:
             token.write(creds.to_json())
 
