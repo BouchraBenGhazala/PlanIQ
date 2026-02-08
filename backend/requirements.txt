@@ -23,3 +23,5 @@ requests
 annotated-types 
 pydantic 
 pydantic-core
+
+uvicorn
