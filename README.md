@@ -258,3 +258,52 @@ I have included a **Demo File** (see the `screenshots/` folder) to showcase the 
 1.  **Real-time Calendar Interaction:** Screenshots of events being booked and deleted by the Agent in Google Calendar.
 2.  **Opik Observability:** Traces from the Comet dashboard proving the Agent's reasoning loop and tool usage.
 3.  **API Testing:** Successful request/response cycles via the FastAPI Swagger UI.
+
+---
+Here is the text to add to the bottom of your `README.md`. I have written it to highlight the technical complexity of your deployment (handling OAuth on a server) and the rigor of your evaluation pipeline.
+
+You can copy and paste this section directly to the end of your file.
+
+***
+
+## Deployment Architecture
+
+The application is deployed as a distributed system to ensure scalability and separation of concerns.
+
+**Live Demo:** [https://planiq-demo.vercel.app/](https://planiq-demo.vercel.app/)
+
+### 1. Backend (Render)
+*   **Platform:** Hosted on **Render** (Python/FastAPI).
+*   **Headless Authentication:**
+    *   Since Render cannot open a browser for Google OAuth, we implemented a robust solution using a `GOOGLE_TOKEN_JSON` environment variable.
+    *   The local `token.json` is serialized and injected into the cloud environment, allowing the agent to authenticate securely without manual intervention.
+*   **Keep-Alive:** A Cron-job pings the backend every 5 minutes to prevent "Cold Starts," ensuring the Agent is always ready to respond instantly.
+
+### 2. Frontend (Vercel)
+*   **Platform:** Hosted on **Vercel** (Next.js/React).
+*   **Connectivity:** connect to the backend via the `NEXT_PUBLIC_API_URL` environment variable (`https://planiq-backend.onrender.com`).
+*   **Chat Interface:** Provides a clean, chat-based UI that handles the JSON communication with the FastAPI agent.
+
+---
+
+## AI Evaluation & Testing (Comet Opik)
+
+To ensure **PlanIQ** is reliable enough for executive use, we moved beyond simple "vibes-based" testing. We implemented a rigorous **LLM-as-a-Judge** evaluation pipeline using **Comet Opik**.
+
+### 1. The Dataset
+We created a curated dataset covering critical edge cases to prevent common AI failures:
+*   **Conflict Handling:** Trying to book a slot that is already taken.
+*   **Safety Protocols:** Attempting to delete an event without finding its ID first.
+*   **Date Logic:** Relative dates (e.g., "Next Friday at 3 PM").
+
+### 2. The Evaluation Rules
+We defined three specific metrics to score the Agent's performance automatically:
+
+| Metric | Type | Purpose |
+| :--- | :--- | :--- |
+| **Answer Relevance** | `LLM-as-a-Judge` | **Sanity Check:** Did the model address the user's prompt or hallucinate something unrelated? |
+| **Result Accuracy** | `Meaning Match` | **Outcome Verification:** Compares the Agent's final text response against the "Ground Truth" (e.g., Expected "Failure due to conflict", Agent said "Success" -> **Fail**). |
+| **Tool Compliance** | `Custom Judge` | **Logic Verification:** A strict technical check. It reads the execution trace to ensure the *correct code functions* were called in the *correct order* (e.g., `list_events` must happen before `delete_event`). |
+
+### 3. Continuous Improvement
+By running this evaluation suite, we can confidently deploy updates, knowing that the Agent respects the user's calendar integrity and follows all safety protocols.
