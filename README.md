@@ -1,6 +1,8 @@
 
 # PlanIQ: The Agentic Productivity Architect
 
+# IMPORTANT : Please check the link of the video demo (the correct one) : https://www.youtube.com/watch?v=f3SX42DJTZ0
+
 **Submission for Milestone: Mid-Hackathon Checkpoint**
 
 PlanIQ is not just a chatbot; it is an **autonomous AI Agent** designed to actively manage your time. Unlike passive to-do lists, PlanIQ integrates directly with **Google Calendar** to read your schedule, reason about your availability, and perform actions (booking, rescheduling, or cancelling) on your behalf.
@@ -271,6 +273,7 @@ You can copy and paste this section directly to the end of your file.
 The application is deployed as a distributed system to ensure scalability and separation of concerns.
 
 **Live Demo:** [https://planiq-demo.vercel.app/](https://planiq-demo.vercel.app/)
+**Video Demo:** 
 
 ### 1. Backend (Render)
 *   **Platform:** Hosted on **Render** (Python/FastAPI).
