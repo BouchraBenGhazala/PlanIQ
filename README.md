@@ -42,7 +42,7 @@ Since this project deals with sensitive API keys and OAuth credentials, they are
 
 ### 1. Clone & Environment
 ```bash
-git clone https://github.com/YOUR_USERNAME/PlanIQ.git
+git clone https://github.com/BouchraBenGhazala/PlanIQ.git
 cd PlanIQ/backend
 
 # Create and activate virtual environment
